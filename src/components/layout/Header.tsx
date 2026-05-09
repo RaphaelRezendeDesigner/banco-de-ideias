@@ -9,9 +9,10 @@ import { useState } from 'react'
 
 interface HeaderProps {
   preCampaignMode?: boolean
+  onMenuClick?: () => void
 }
 
-export function Header({ preCampaignMode }: HeaderProps) {
+export function Header({ preCampaignMode, onMenuClick }: HeaderProps) {
   const router = useRouter()
   const [search, setSearch] = useState('')
 
@@ -24,7 +25,7 @@ export function Header({ preCampaignMode }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 h-14 border-b border-border bg-background/80 backdrop-blur-sm flex items-center gap-4 px-4 md:px-6">
-      <Button variant="ghost" size="icon" className="md:hidden">
+      <Button variant="ghost" size="icon" className="md:hidden" onClick={onMenuClick}>
         <Menu className="w-4 h-4" />
       </Button>
 
