@@ -29,12 +29,12 @@ export function FilterPanel({
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
-      <Select value={filters.category || ''} onValueChange={v => onFilterChange('category', v)}>
+      <Select value={filters.category || '__all__'} onValueChange={v => onFilterChange('category', v === '__all__' ? '' : v)}>
         <SelectTrigger className="w-40 h-8 text-xs">
           <SelectValue placeholder="Categoria" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="">Todas</SelectItem>
+          <SelectItem value="__all__">Todas</SelectItem>
           {categories.map(c => (
             <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
           ))}
@@ -42,12 +42,12 @@ export function FilterPanel({
       </Select>
 
       {statusOptions.length > 0 && (
-        <Select value={filters.status || ''} onValueChange={v => onFilterChange('status', v)}>
+        <Select value={filters.status || '__all__'} onValueChange={v => onFilterChange('status', v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-40 h-8 text-xs">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value="__all__">Todos</SelectItem>
             {statusOptions.map(o => (
               <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
             ))}
@@ -56,12 +56,12 @@ export function FilterPanel({
       )}
 
       {showUrgency && (
-        <Select value={filters.urgency || ''} onValueChange={v => onFilterChange('urgency', v)}>
+        <Select value={filters.urgency || '__all__'} onValueChange={v => onFilterChange('urgency', v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-32 h-8 text-xs">
             <SelectValue placeholder="Urgência" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todas</SelectItem>
+            <SelectItem value="__all__">Todas</SelectItem>
             <SelectItem value="baixa">🟢 Baixa</SelectItem>
             <SelectItem value="media">🟡 Média</SelectItem>
             <SelectItem value="alta">🔴 Alta</SelectItem>
@@ -70,12 +70,12 @@ export function FilterPanel({
       )}
 
       {showFormat && (
-        <Select value={filters.format || ''} onValueChange={v => onFilterChange('format', v)}>
+        <Select value={filters.format || '__all__'} onValueChange={v => onFilterChange('format', v === '__all__' ? '' : v)}>
           <SelectTrigger className="w-40 h-8 text-xs">
             <SelectValue placeholder="Formato" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos</SelectItem>
+            <SelectItem value="__all__">Todos</SelectItem>
             <SelectItem value="video">Vídeo</SelectItem>
             <SelectItem value="legenda">Legenda Instagram</SelectItem>
             <SelectItem value="discurso">Discurso</SelectItem>
