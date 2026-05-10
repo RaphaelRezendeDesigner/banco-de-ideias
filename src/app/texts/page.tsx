@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, FileText, LayoutGrid, List, Loader2, Lightbulb, Layers } from 'lucide-react'
+import { Plus, FileText, LayoutGrid, List, Loader2, Lightbulb, Layers, ChevronRight, ArrowUpRight } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { TextCard } from '@/components/TextCard'
@@ -32,6 +32,16 @@ export default function TextsPage() {
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [groupBy, setGroupBy] = useState<'idea' | 'status'>('idea')
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+
+  const toggleGroup = (id: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   // Read initial filters from URL (e.g., ?status=pronto, ?category=xxx)
   useEffect(() => {
@@ -204,27 +214,61 @@ export default function TextsPage() {
             </p>
           </div>
         ) : groupBy === 'idea' ? (
-          <div className="space-y-8">
-            {ideaGroups.map(group => (
-              <section key={group.id ?? '__orphan__'}>
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold flex items-center gap-1.5">
-                    <Lightbulb className="w-3.5 h-3.5 text-gold-400" />
-                    {group.id ? (
-                      <Link href={`/ideas/${group.id}`} className="hover:text-gold-400 transition-colors">
-                        {group.title}
-                      </Link>
-                    ) : (
-                      <span className="text-muted-foreground">{group.title}</span>
-                    )}
-                    <span className="text-xs text-muted-foreground font-normal">({group.texts.length})</span>
-                  </h2>
+          <div className="space-y-3">
+            {ideaGroups.map(group => {
+              const groupKey = group.id ?? '__orphan__'
+              const isOpen = expandedGroups.has(groupKey)
+              return (
+                <div
+                  key={groupKey}
+                  className="rounded-xl border border-border bg-card overflow-hidden transition-all hover:border-gold-500/30"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(groupKey)}
+                    className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gold-500/10 shrink-0">
+                        <Lightbulb className="w-4 h-4 text-gold-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{group.title}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {group.texts.length} texto{group.texts.length === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {group.id && (
+                        <Link
+                          href={`/ideas/${group.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="text-xs text-muted-foreground hover:text-gold-400 transition-colors flex items-center gap-1"
+                          title="Abrir ideia"
+                        >
+                          Ver ideia
+                          <ArrowUpRight className="w-3 h-3" />
+                        </Link>
+                      )}
+                      <ChevronRight
+                        className={`w-4 h-4 text-muted-foreground transition-transform ${isOpen ? 'rotate-90' : ''}`}
+                      />
+                    </div>
+                  </button>
+
+                  {isOpen && (
+                    <div className="p-4 pt-0 border-t border-border/50">
+                      <div className={view === 'grid' ? 'grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4' : 'space-y-3 mt-4'}>
+                        {group.texts.map(t => (
+                          <TextCard key={t.id} text={t} onCopy={handleCopy} onDelete={handleDelete} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className={view === 'grid' ? 'grid sm:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
-                  {group.texts.map(t => <TextCard key={t.id} text={t} onCopy={handleCopy} onDelete={handleDelete} />)}
-                </div>
-              </section>
-            ))}
+              )
+            })}
           </div>
         ) : (
           <div className="space-y-8">
