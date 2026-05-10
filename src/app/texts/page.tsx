@@ -29,6 +29,20 @@ export default function TextsPage() {
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<Record<string, string>>({})
   const [view, setView] = useState<'grid' | 'list'>('grid')
+
+  // Read initial filters from URL (e.g., ?status=pronto, ?category=xxx)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    const initial: Record<string, string> = {}
+    for (const k of ['status', 'category', 'format']) {
+      const v = params.get(k)
+      if (v) initial[k] = v
+    }
+    if (Object.keys(initial).length) setFilters(initial)
+    const q = params.get('q')
+    if (q) setSearch(q)
+  }, [])
   const { toast } = useToast()
   const router = useRouter()
   const supabase = createClient()
