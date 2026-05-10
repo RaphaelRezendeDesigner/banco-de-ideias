@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Video, Mic, Globe, Archive,
-  Calendar, Link2, Hash, Clock, CheckCircle,
+  Calendar, Link2, Hash, Clock, CheckCircle, Loader2,
 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
@@ -13,25 +13,59 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent } from '@/components/ui/card'
 import { TextEditor } from '@/components/TextEditor'
 import { CategoryBadge } from '@/components/CategoryBadge'
 import { TextStatusBadge } from '@/components/StatusBadge'
 import { useToast } from '@/components/ui/use-toast'
-import { MOCK_TEXTS } from '@/lib/mock-data'
+import { createClient } from '@/lib/supabase/client'
 import { FORMAT_LABELS, countWords, estimateSpeechTime, formatDate } from '@/lib/utils'
-import type { TextStatus } from '@/types'
+import type { TextStatus, Text } from '@/types'
 import { Separator } from '@/components/ui/separator'
 
 export default function TextDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { toast } = useToast()
-  const original = MOCK_TEXTS.find(t => t.id === id)
+  const supabase = createClient()
 
-  const [content, setContent] = useState(original?.content || '')
-  const [notes, setNotes] = useState(original?.notes || '')
-  const [publishedLink, setPublishedLink] = useState(original?.published_link || '')
-  const [status, setStatus] = useState<TextStatus>(original?.status || 'rascunho')
+  const [original, setOriginal] = useState<Text | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [content, setContent] = useState('')
+  const [notes, setNotes] = useState('')
+  const [publishedLink, setPublishedLink] = useState('')
+  const [status, setStatus] = useState<TextStatus>('rascunho')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('texts')
+      .select('*, category:categories(*)')
+      .eq('id', id)
+      .single()
+    if (error || !data) {
+      setOriginal(null)
+    } else {
+      const t = data as Text
+      setOriginal(t)
+      setContent(t.content || '')
+      setNotes(t.notes || '')
+      setPublishedLink(t.published_link || '')
+      setStatus(t.status)
+    }
+    setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id])
+
+  useEffect(() => { load() }, [load])
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="max-w-3xl mx-auto flex justify-center py-16">
+          <Loader2 className="w-7 h-7 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    )
+  }
 
   if (!original) {
     return (
@@ -49,25 +83,42 @@ export default function TextDetailPage() {
   const wordCount = countWords(content)
   const speechTime = estimateSpeechTime(wordCount)
 
-  const changeStatus = (newStatus: TextStatus) => {
+  const changeStatus = async (newStatus: TextStatus) => {
     setStatus(newStatus)
+    const { error } = await supabase.from('texts').update({ status: newStatus }).eq('id', id)
+    if (error) {
+      toast({ title: 'Erro ao atualizar', description: error.message, variant: 'destructive' })
+      return
+    }
     toast({ title: `Status: ${newStatus}`, variant: 'success' })
   }
 
-  const handleSave = async (val: string) => {
+  const handleSaveContent = async (val: string) => {
     setContent(val)
-    await new Promise(r => setTimeout(r, 500))
+    const { error } = await supabase
+      .from('texts')
+      .update({ content: val, word_count: countWords(val) })
+      .eq('id', id)
+    if (error) throw new Error(error.message)
+  }
+
+  const saveNotes = async () => {
+    await supabase.from('texts').update({ notes }).eq('id', id)
+    toast({ title: 'Observações salvas', variant: 'success' })
+  }
+
+  const savePublishedLink = async () => {
+    await supabase.from('texts').update({ published_link: publishedLink }).eq('id', id)
+    toast({ title: 'Link salvo', variant: 'success' })
   }
 
   return (
     <AppLayout>
       <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
-        {/* Back */}
         <Button variant="ghost" size="sm" asChild className="gap-2 -ml-2">
           <Link href="/texts"><ArrowLeft className="w-4 h-4" /> Biblioteca de Textos</Link>
         </Button>
 
-        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
@@ -86,7 +137,6 @@ export default function TextDetailPage() {
 
         <Separator />
 
-        {/* Status actions */}
         <div className="flex flex-wrap gap-2">
           {status !== 'pronto' && (
             <Button size="sm" variant="outline" className="gap-2 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10" onClick={() => changeStatus('pronto')}>
@@ -114,16 +164,14 @@ export default function TextDetailPage() {
           )}
         </div>
 
-        {/* Editor */}
         <TextEditor
           value={content}
           onChange={setContent}
-          onSave={handleSave}
+          onSave={handleSaveContent}
           className="min-h-[380px]"
           autoSave
         />
 
-        {/* Side info */}
         <div className="grid sm:grid-cols-2 gap-4">
           {status === 'publicado' && (
             <div className="space-y-2">
@@ -131,11 +179,14 @@ export default function TextDetailPage() {
                 <Link2 className="w-3.5 h-3.5" />
                 Link da publicação
               </Label>
-              <Input
-                value={publishedLink}
-                onChange={e => setPublishedLink(e.target.value)}
-                placeholder="https://..."
-              />
+              <div className="flex gap-2">
+                <Input
+                  value={publishedLink}
+                  onChange={e => setPublishedLink(e.target.value)}
+                  placeholder="https://..."
+                />
+                <Button onClick={savePublishedLink} size="sm">Salvar</Button>
+              </div>
             </div>
           )}
 
@@ -147,6 +198,7 @@ export default function TextDetailPage() {
             <Textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
+              onBlur={saveNotes}
               placeholder="Notas de gravação, contexto..."
               className="h-24"
             />
