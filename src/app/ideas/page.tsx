@@ -162,7 +162,10 @@ export default function IdeasPage() {
         open={createOpen}
         onOpenChange={setCreateOpen}
         categories={categories}
-        onCreated={created => setIdeas(prev => [created, ...prev])}
+        onCreated={(created, autoTransform) => {
+          setIdeas(prev => [created, ...prev])
+          if (autoTransform) setTransformIdea(created)
+        }}
       />
 
       <TransformIdeaDialog

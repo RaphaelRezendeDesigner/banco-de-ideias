@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Lightbulb, Loader2 } from 'lucide-react'
+import { Lightbulb, Loader2, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
@@ -16,11 +17,14 @@ interface IdeaQuickDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   categories: Category[]
-  onCreated?: (idea: Idea) => void
+  onCreated?: (idea: Idea, autoTransform?: boolean) => void
 }
+
+const AI_ENABLED = !!(process.env.NEXT_PUBLIC_AI_PROVIDER && process.env.NEXT_PUBLIC_AI_PROVIDER !== 'none')
 
 export function IdeaQuickDialog({ open, onOpenChange, categories, onCreated }: IdeaQuickDialogProps) {
   const [saving, setSaving] = useState(false)
+  const [autoTransform, setAutoTransform] = useState(AI_ENABLED)
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -58,8 +62,12 @@ export function IdeaQuickDialog({ open, onOpenChange, categories, onCreated }: I
         .single()
       if (error) throw error
       const created = data as Idea
-      onCreated?.(created)
-      toast({ title: 'Ideia salva!', variant: 'success' })
+      onCreated?.(created, autoTransform)
+      toast({
+        title: 'Ideia salva!',
+        description: autoTransform ? 'Gerando formatos com IA...' : undefined,
+        variant: 'success',
+      })
       reset()
       onOpenChange(false)
     } catch (err: unknown) {
@@ -142,12 +150,31 @@ export function IdeaQuickDialog({ open, onOpenChange, categories, onCreated }: I
             </div>
           </div>
 
+          {AI_ENABLED && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-gold-500/20 bg-gold-500/5 p-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-gold-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Gerar formatos com IA</p>
+                  <p className="text-xs text-muted-foreground">Vídeo, story, carrossel, legenda — tudo de uma vez</p>
+                </div>
+              </div>
+              <Switch checked={autoTransform} onCheckedChange={setAutoTransform} />
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
               Cancelar
             </Button>
             <Button className="flex-1" onClick={handleSave} disabled={saving}>
-              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</> : <><Lightbulb className="w-4 h-4" /> Salvar</>}
+              {saving ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Salvando...</>
+              ) : autoTransform && AI_ENABLED ? (
+                <><Sparkles className="w-4 h-4" /> Salvar e gerar</>
+              ) : (
+                <><Lightbulb className="w-4 h-4" /> Salvar</>
+              )}
             </Button>
           </div>
         </div>

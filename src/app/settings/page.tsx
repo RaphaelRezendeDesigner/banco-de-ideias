@@ -12,12 +12,19 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/components/ui/use-toast'
 
+const AI_PROVIDER_FROM_ENV = process.env.NEXT_PUBLIC_AI_PROVIDER || 'none'
+const AI_LABELS: Record<string, string> = {
+  none: 'Sem IA integrada',
+  openai: 'OpenAI (GPT-4o)',
+  anthropic: 'Anthropic (Claude)',
+}
+
 export default function SettingsPage() {
   const [preCampaignMode, setPreCampaignMode] = useState(false)
-  const [aiProvider, setAiProvider] = useState('none')
   const [theme, setTheme] = useState('dark')
   const [saving, setSaving] = useState(false)
   const { toast } = useToast()
+  const aiActive = AI_PROVIDER_FROM_ENV !== 'none'
 
   const handleSave = async () => {
     setSaving(true)
@@ -94,35 +101,25 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Provedor de IA</Label>
-              <Select value={aiProvider} onValueChange={setAiProvider}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem IA integrada (copiar prompt)</SelectItem>
-                  <SelectItem value="openai">OpenAI (GPT-4o)</SelectItem>
-                  <SelectItem value="anthropic">Anthropic (Claude Sonnet)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1">
+              <p className="text-xs text-muted-foreground">Status atual (definido pelo servidor)</p>
+              <p className="text-sm font-medium flex items-center gap-2">
+                {aiActive ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                    Ativa — {AI_LABELS[AI_PROVIDER_FROM_ENV] || AI_PROVIDER_FROM_ENV}
+                  </>
+                ) : (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block" />
+                    Desativada (modo "copiar prompt")
+                  </>
+                )}
+              </p>
+              <p className="text-[11px] text-muted-foreground pt-1">
+                Para mudar, edite as variáveis <code>NEXT_PUBLIC_AI_PROVIDER</code>, <code>AI_PROVIDER</code> e a chave correspondente no Vercel e refaça o deploy.
+              </p>
             </div>
-
-            {aiProvider !== 'none' && (
-              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
-                <p className="text-xs font-medium">Configuração necessária no servidor</p>
-                {aiProvider === 'openai' && (
-                  <code className="text-xs text-gold-400 block">OPENAI_API_KEY=sk-...</code>
-                )}
-                {aiProvider === 'anthropic' && (
-                  <code className="text-xs text-gold-400 block">ANTHROPIC_API_KEY=sk-ant-...</code>
-                )}
-                <code className="text-xs text-gold-400 block">AI_PROVIDER={aiProvider}</code>
-                <p className="text-[11px] text-muted-foreground">
-                  Adicione essas variáveis ao arquivo <code>.env.local</code> e reinicie o servidor.
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

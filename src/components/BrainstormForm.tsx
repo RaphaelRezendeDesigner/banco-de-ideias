@@ -230,7 +230,7 @@ export function BrainstormForm({ initialData, onSave, onGenerateText, hasAiConfi
         {hasAiConfigured && onGenerateText && (
           <Button variant="outline" onClick={handleGenerateText} disabled={generating} className="gap-2 border-gold-500/30 text-gold-400 hover:bg-gold-500/10">
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Gerar texto com IA integrada
+            Gerar 5 formatos com IA
           </Button>
         )}
       </div>
