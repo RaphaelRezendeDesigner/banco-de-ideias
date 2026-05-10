@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Sparkles, Loader2, Copy, Save, AlertCircle, Wand2 } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Sparkles, Loader2, Copy, Check, AlertCircle, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -30,13 +30,22 @@ interface FormatResult {
 
 export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps) {
   const [loading, setLoading] = useState(false)
+  const [savingAll, setSavingAll] = useState(false)
   const [results, setResults] = useState<FormatResult[]>([])
+  const [savedTypes, setSavedTypes] = useState<Set<GenerationType>>(new Set())
   const [activeTab, setActiveTab] = useState<string>(FORMATS[0].type)
   const { toast } = useToast()
+  const lastIdeaIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!idea) return
+    if (!idea) {
+      lastIdeaIdRef.current = null
+      return
+    }
+    if (lastIdeaIdRef.current === idea.id) return
+    lastIdeaIdRef.current = idea.id
     setResults([])
+    setSavedTypes(new Set())
     setActiveTab(FORMATS[0].type)
     void generate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -45,6 +54,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
   const generate = async () => {
     if (!idea) return
     setLoading(true)
+    setSavedTypes(new Set())
     try {
       const res = await fetch('/api/ai/generate-multi', {
         method: 'POST',
@@ -56,7 +66,10 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erro na geração')
-      setResults(json.formats as FormatResult[])
+      const formats = json.formats as FormatResult[]
+      setResults(formats)
+      // Auto-save all successful generations to the library
+      void saveAll(formats, true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro desconhecido'
       toast({ title: 'Erro ao gerar', description: message, variant: 'destructive' })
@@ -65,36 +78,67 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
     }
   }
 
-  const handleCopy = async (text: string) => {
-    await navigator.clipboard.writeText(text)
-    toast({ title: 'Copiado!', variant: 'success' })
-  }
-
-  const handleSave = async (formatType: GenerationType, content: string) => {
+  const saveAll = async (formats: FormatResult[], silent = false) => {
     if (!idea) return
-    const formatMeta = FORMATS.find(f => f.type === formatType)!
+    if (!silent) setSavingAll(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      toast({ title: 'Faça login para salvar', variant: 'destructive' })
+      if (!silent) toast({ title: 'Faça login para salvar', variant: 'destructive' })
+      setSavingAll(false)
       return
     }
-    const wordCount = content.trim().split(/\s+/).filter(Boolean).length
-    const { error } = await supabase.from('texts').insert({
-      user_id: user.id,
-      idea_id: idea.id,
-      title: `${idea.title} — ${formatMeta.label}`,
-      content,
-      category_id: idea.category_id || null,
-      status: 'rascunho',
-      format: formatMeta.format,
-      word_count: wordCount,
-    })
+    const toInsert = formats
+      .filter(r => !r.error && r.result && !savedTypes.has(r.type))
+      .map(r => {
+        const meta = FORMATS.find(f => f.type === r.type)!
+        return {
+          user_id: user.id,
+          idea_id: idea.id,
+          title: `${idea.title} — ${meta.label}`,
+          content: r.result,
+          category_id: idea.category_id || null,
+          status: 'rascunho',
+          format: meta.format,
+          word_count: r.result.trim().split(/\s+/).filter(Boolean).length,
+        }
+      })
+
+    if (toInsert.length === 0) {
+      if (!silent) toast({ title: 'Nada para salvar', variant: 'default' })
+      setSavingAll(false)
+      return
+    }
+
+    const { error } = await supabase.from('texts').insert(toInsert)
     if (error) {
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
-      return
+    } else {
+      setSavedTypes(prev => {
+        const next = new Set(prev)
+        toInsert.forEach(t => next.add(formats.find(f => `${idea.title} — ${FORMATS.find(x => x.type === f.type)!.label}` === t.title)!.type))
+        formats.forEach(f => { if (!f.error && f.result) next.add(f.type) })
+        return next
+      })
+      if (!silent) {
+        toast({
+          title: `${toInsert.length} texto(s) salvos na biblioteca!`,
+          variant: 'success',
+        })
+      } else {
+        toast({
+          title: `${toInsert.length} formatos salvos automaticamente`,
+          description: 'Disponíveis em Biblioteca de Textos',
+          variant: 'success',
+        })
+      }
     }
-    toast({ title: 'Texto salvo na biblioteca!', variant: 'success' })
+    setSavingAll(false)
+  }
+
+  const handleCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text)
+    toast({ title: 'Copiado!', variant: 'success' })
   }
 
   return (
@@ -107,53 +151,58 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
             </div>
             Transformar com IA
           </DialogTitle>
-          {idea && (
-            <p className="text-sm text-muted-foreground pt-1">{idea.title}</p>
-          )}
+          {idea && <p className="text-sm text-muted-foreground pt-1">{idea.title}</p>}
         </DialogHeader>
 
         {loading && results.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
             <Loader2 className="w-8 h-8 animate-spin text-gold-400" />
             <p className="text-sm text-muted-foreground">Gerando 5 formatos em paralelo...</p>
+            <p className="text-xs text-muted-foreground">Salvaremos todos automaticamente na biblioteca</p>
           </div>
         ) : results.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-16 gap-3">
             <AlertCircle className="w-8 h-8 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Nenhum resultado. Tente novamente.</p>
             <Button onClick={generate} variant="outline" className="gap-2">
-              <Wand2 className="w-4 h-4" />
-              Gerar
+              <Wand2 className="w-4 h-4" /> Gerar
             </Button>
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
             <TabsList className="flex-wrap h-auto">
-              {FORMATS.map(f => (
-                <TabsTrigger key={f.type} value={f.type} className="text-xs">
-                  {f.label}
-                </TabsTrigger>
-              ))}
+              {FORMATS.map(f => {
+                const saved = savedTypes.has(f.type)
+                return (
+                  <TabsTrigger key={f.type} value={f.type} className="text-xs gap-1">
+                    {saved && <Check className="w-3 h-3 text-emerald-400" />}
+                    {f.label}
+                  </TabsTrigger>
+                )
+              })}
             </TabsList>
 
             {FORMATS.map(f => {
               const r = results.find(x => x.type === f.type)
+              const saved = savedTypes.has(f.type)
               return (
                 <TabsContent key={f.type} value={f.type} className="flex-1 overflow-y-auto mt-3">
                   {!r ? (
                     <p className="text-sm text-muted-foreground p-4">Sem resultado</p>
                   ) : r.error ? (
-                    <div className="p-4 text-sm text-destructive bg-destructive/10 rounded-lg">
-                      {r.error}
-                    </div>
+                    <div className="p-4 text-sm text-destructive bg-destructive/10 rounded-lg">{r.error}</div>
                   ) : (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          {saved ? (
+                            <><Check className="w-3.5 h-3.5 text-emerald-400" /> Salvo na biblioteca</>
+                          ) : (
+                            <>Não salvo</>
+                          )}
+                        </div>
                         <Button size="sm" variant="outline" className="gap-1.5 h-8" onClick={() => handleCopy(r.result)}>
                           <Copy className="w-3 h-3" /> Copiar
-                        </Button>
-                        <Button size="sm" className="gap-1.5 h-8" onClick={() => handleSave(f.type, r.result)}>
-                          <Save className="w-3 h-3" /> Salvar na biblioteca
                         </Button>
                       </div>
                       <pre className="whitespace-pre-wrap text-sm font-sans bg-muted/30 border border-border rounded-lg p-4 leading-relaxed">
@@ -167,13 +216,15 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
           </Tabs>
         )}
 
-        <div className="flex justify-between items-center pt-3 border-t border-border">
+        <div className="flex justify-between items-center gap-2 pt-3 border-t border-border">
           <Button variant="ghost" onClick={onClose}>Fechar</Button>
-          {!loading && results.length > 0 && (
-            <Button variant="outline" onClick={generate} className="gap-2">
-              <Wand2 className="w-4 h-4" /> Gerar de novo
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {!loading && results.length > 0 && (
+              <Button variant="outline" onClick={generate} className="gap-2">
+                <Wand2 className="w-4 h-4" /> Gerar de novo
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
