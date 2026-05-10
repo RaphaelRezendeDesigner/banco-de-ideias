@@ -136,11 +136,16 @@ Slide 7: CTA e informação de contato`
 }
 
 export async function generateWithAI(params: GenerateParams): Promise<string> {
-  const provider = process.env.AI_PROVIDER as 'openai' | 'anthropic' | 'none' | undefined
+  const raw = process.env.AI_PROVIDER || process.env.NEXT_PUBLIC_AI_PROVIDER
+  const provider = raw as 'openai' | 'anthropic' | 'none' | undefined
   const prompt = GENERATION_PROMPTS[params.type](params)
 
   if (!provider || provider === 'none') {
-    throw new Error('AI_PROVIDER não configurado. Configure OPENAI_API_KEY ou ANTHROPIC_API_KEY no .env')
+    const hasOpenAI = !!process.env.OPENAI_API_KEY
+    const hasAnthropic = !!process.env.ANTHROPIC_API_KEY
+    if (hasOpenAI) return generateWithOpenAI(prompt)
+    if (hasAnthropic) return generateWithAnthropic(prompt)
+    throw new Error('IA não configurada. No Vercel, defina AI_PROVIDER=openai (ou anthropic) e a chave OPENAI_API_KEY (ou ANTHROPIC_API_KEY).')
   }
 
   if (provider === 'openai') {
