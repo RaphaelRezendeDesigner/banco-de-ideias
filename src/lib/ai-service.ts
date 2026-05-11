@@ -15,6 +15,9 @@ interface GenerateParams {
     free_notes: string
   }
   context?: string
+  // Optional per-format tuning
+  slideCount?: number   // for ideias_carrossel (3, 5, 7, 9...)
+  storyCount?: number   // for frases_impacto (number of story options)
 }
 
 const GENERATION_PROMPTS: Record<GenerationType, (params: GenerateParams) => string> = {
@@ -109,30 +112,43 @@ Tom: próximo, humanizado, que conecta com o interior do Amazonas.`
 }
 
 function buildImpactPhrases(p: GenerateParams): string {
-  return `Crie 10 frases de impacto sobre o tema abaixo, para uso em comunicação política.
+  const count = p.storyCount && p.storyCount > 0 ? p.storyCount : 5
+  return `Crie ${count} stories prontos para postar no Instagram a partir do tema abaixo.
 Contexto:${contextBlock(p)}
 
-Requisitos:
-- Cada frase deve ter no máximo 15 palavras
-- Linguagem direta e memorável
-- Sem pedido de voto
-- Variadas em tom: inspiracional, factual, provocativo
-- Adequadas para artes, stories e vídeos curtos`
+Entregue cada story numerado de 1 a ${count}, no formato:
+
+STORY [N]
+Frase principal: "<frase de impacto, até 15 palavras>"
+Subtexto (opcional): <complemento curto ou hashtag>
+Sugestão visual: <fundo, foto, cor ou elemento gráfico>
+Tom: <inspiracional | factual | provocativo | emocional>
+
+Regras:
+- Frases prontas para virar arte de story (não precisam ser editadas)
+- Variadas em tom entre os ${count} stories
+- Sem pedido de voto, sem número de campanha
+- Linguagem direta, memorável, próxima do interior do Amazonas
+- Cada story deve funcionar isolado (não dependem uns dos outros)`
 }
 
 function buildCarousel(p: GenerateParams): string {
-  return `Crie um roteiro de carrossel para Instagram com 7 slides.
+  const slides = p.slideCount && p.slideCount > 0 ? p.slideCount : 7
+  const closing = slides
+  return `Crie um roteiro de carrossel para Instagram com exatamente ${slides} slides.
 Contexto:${contextBlock(p)}
 
 Para cada slide entregue:
 - Número do slide
 - Título (até 6 palavras)
 - Texto do slide (até 30 palavras)
-- Sugestão de elemento visual
+- Sugestão de elemento visual (foto, cor, ícone)
 
-Slide 1: Capa com frase-gancho
-Slides 2-6: Desenvolvimento
-Slide 7: CTA e informação de contato`
+Estrutura:
+- Slide 1: Capa com frase-gancho forte (parar o scroll)
+${slides > 2 ? `- Slides 2 a ${slides - 1}: Desenvolvimento progressivo do argumento\n` : ''}- Slide ${closing}: CTA + informação de contato (sem pedido de voto)
+
+Linguagem natural, próxima do interior do Amazonas. Cada slide deve fazer sentido mesmo sem os outros.`
 }
 
 type ProviderName = 'openai' | 'anthropic' | 'gemini' | 'none'

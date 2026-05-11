@@ -5,11 +5,13 @@ import type { GenerationType, AiProvider } from '@/types'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { type, brainstorm, context, provider } = body as {
+    const { type, brainstorm, context, provider, slideCount, storyCount } = body as {
       type: GenerationType
       brainstorm?: object
       context?: string
       provider?: AiProvider
+      slideCount?: number
+      storyCount?: number
     }
 
     if (!type) {
@@ -21,6 +23,8 @@ export async function POST(request: NextRequest) {
       brainstorm: brainstorm as Parameters<typeof generateWithAI>[0]['brainstorm'],
       context,
       provider,
+      slideCount,
+      storyCount,
     })
     return NextResponse.json({ result })
   } catch (err: unknown) {

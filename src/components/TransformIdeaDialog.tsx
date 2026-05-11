@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { Sparkles, Loader2, Copy, Check, AlertCircle, Wand2 } from 'lucide-react'
+import { Sparkles, Loader2, Copy, Check, AlertCircle, Wand2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -20,8 +20,13 @@ const FORMATS: { type: GenerationType; label: string; format: TextFormat }[] = [
   { type: 'roteiro_60s', label: 'Vídeo 60s', format: 'video' },
   { type: 'legenda_instagram', label: 'Legenda Instagram', format: 'legenda' },
   { type: 'ideias_carrossel', label: 'Carrossel', format: 'carrossel' },
-  { type: 'frases_impacto', label: 'Frases de Impacto', format: 'story' },
+  { type: 'frases_impacto', label: 'Stories', format: 'story' },
 ]
+
+const SLIDE_OPTIONS = [3, 5, 7, 9]
+const STORY_OPTIONS = [3, 5, 7, 10]
+const DEFAULT_SLIDES = 5
+const DEFAULT_STORIES = 5
 
 interface FormatResult {
   type: GenerationType
@@ -31,9 +36,11 @@ interface FormatResult {
 
 export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [savingAll, setSavingAll] = useState(false)
   const [results, setResults] = useState<FormatResult[]>([])
-  const [savedTypes, setSavedTypes] = useState<Set<GenerationType>>(new Set())
+  const [savedIds, setSavedIds] = useState<Map<GenerationType, string>>(new Map())
+  const [regenerating, setRegenerating] = useState<Set<GenerationType>>(new Set())
+  const [slideCount, setSlideCount] = useState(DEFAULT_SLIDES)
+  const [storyCount, setStoryCount] = useState(DEFAULT_STORIES)
   const [activeTab, setActiveTab] = useState<string>(FORMATS[0].type)
   const { toast } = useToast()
   const lastIdeaIdRef = useRef<string | null>(null)
@@ -46,7 +53,9 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
     if (lastIdeaIdRef.current === idea.id) return
     lastIdeaIdRef.current = idea.id
     setResults([])
-    setSavedTypes(new Set())
+    setSavedIds(new Map())
+    setSlideCount(DEFAULT_SLIDES)
+    setStoryCount(DEFAULT_STORIES)
     setActiveTab(FORMATS[0].type)
     void generate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,7 +64,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
   const generate = async () => {
     if (!idea) return
     setLoading(true)
-    setSavedTypes(new Set())
+    setSavedIds(new Map())
     try {
       const res = await fetch('/api/ai/generate-multi', {
         method: 'POST',
@@ -64,14 +73,15 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
           idea: { title: idea.title, description: idea.description },
           types: FORMATS.map(f => f.type),
           provider: getPreferredProvider() ?? undefined,
+          slideCount,
+          storyCount,
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erro na geração')
       const formats = json.formats as FormatResult[]
       setResults(formats)
-      // Auto-save all successful generations to the library
-      void saveAll(formats, true)
+      void saveAll(formats)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro desconhecido'
       toast({ title: 'Erro ao gerar', description: message, variant: 'destructive' })
@@ -80,18 +90,13 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
     }
   }
 
-  const saveAll = async (formats: FormatResult[], silent = false) => {
+  const saveAll = async (formats: FormatResult[]) => {
     if (!idea) return
-    if (!silent) setSavingAll(true)
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      if (!silent) toast({ title: 'Faça login para salvar', variant: 'destructive' })
-      setSavingAll(false)
-      return
-    }
+    if (!user) return
     const toInsert = formats
-      .filter(r => !r.error && r.result && !savedTypes.has(r.type))
+      .filter(r => !r.error && r.result)
       .map(r => {
         const meta = FORMATS.find(f => f.type === r.type)!
         return {
@@ -103,39 +108,105 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
           status: 'rascunho',
           format: meta.format,
           word_count: r.result.trim().split(/\s+/).filter(Boolean).length,
+          // tag the row with which format it represents (re-derivable, but handy)
         }
       })
+    if (toInsert.length === 0) return
 
-    if (toInsert.length === 0) {
-      if (!silent) toast({ title: 'Nada para salvar', variant: 'default' })
-      setSavingAll(false)
-      return
-    }
-
-    const { error } = await supabase.from('texts').insert(toInsert)
+    const { data, error } = await supabase.from('texts').insert(toInsert).select('id, format, title')
     if (error) {
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
-    } else {
-      setSavedTypes(prev => {
+      return
+    }
+    // Map back: title contains the format label, so we recover the type.
+    const next = new Map<GenerationType, string>()
+    for (const row of data ?? []) {
+      const meta = FORMATS.find(f => row.title.endsWith(`— ${f.label}`))
+      if (meta) next.set(meta.type, row.id)
+    }
+    setSavedIds(next)
+    toast({
+      title: `${toInsert.length} formatos gerados e salvos`,
+      description: 'Disponíveis em Biblioteca de Textos',
+      variant: 'success',
+    })
+  }
+
+  const regenerateOne = async (type: GenerationType) => {
+    if (!idea) return
+    const meta = FORMATS.find(f => f.type === type)!
+    setRegenerating(prev => new Set(prev).add(type))
+    try {
+      const body: Record<string, unknown> = {
+        type,
+        brainstorm: {
+          central_idea: idea.title,
+          problem_solved: '',
+          target_audience: '',
+          emotion: '',
+          impact_phrase: '',
+          main_arguments: idea.description ?? '',
+          local_examples: '',
+          tone: 'emocional',
+          format: 'video',
+          free_notes: '',
+        },
+        provider: getPreferredProvider() ?? undefined,
+      }
+      if (type === 'ideias_carrossel') body.slideCount = slideCount
+      if (type === 'frases_impacto') body.storyCount = storyCount
+
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Erro')
+      const newContent = json.result as string
+
+      // Update local state
+      setResults(prev => prev.map(r => r.type === type ? { ...r, result: newContent, error: null } : r))
+
+      // Update saved row in DB if we have its id
+      const savedId = savedIds.get(type)
+      const supabase = createClient()
+      if (savedId) {
+        await supabase
+          .from('texts')
+          .update({
+            content: newContent,
+            word_count: newContent.trim().split(/\s+/).filter(Boolean).length,
+          })
+          .eq('id', savedId)
+      } else {
+        // Wasn't saved (probably failed earlier). Insert now.
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          const { data } = await supabase.from('texts').insert({
+            user_id: user.id,
+            idea_id: idea.id,
+            title: `${idea.title} — ${meta.label}`,
+            content: newContent,
+            category_id: idea.category_id || null,
+            status: 'rascunho',
+            format: meta.format,
+            word_count: newContent.trim().split(/\s+/).filter(Boolean).length,
+          }).select('id').single()
+          if (data) setSavedIds(prev => new Map(prev).set(type, data.id))
+        }
+      }
+      toast({ title: `${meta.label} atualizado`, variant: 'success' })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erro'
+      toast({ title: 'Erro ao regenerar', description: message, variant: 'destructive' })
+    } finally {
+      setRegenerating(prev => {
         const next = new Set(prev)
-        toInsert.forEach(t => next.add(formats.find(f => `${idea.title} — ${FORMATS.find(x => x.type === f.type)!.label}` === t.title)!.type))
-        formats.forEach(f => { if (!f.error && f.result) next.add(f.type) })
+        next.delete(type)
         return next
       })
-      if (!silent) {
-        toast({
-          title: `${toInsert.length} texto(s) salvos na biblioteca!`,
-          variant: 'success',
-        })
-      } else {
-        toast({
-          title: `${toInsert.length} formatos salvos automaticamente`,
-          description: 'Disponíveis em Biblioteca de Textos',
-          variant: 'success',
-        })
-      }
     }
-    setSavingAll(false)
   }
 
   const handleCopy = async (text: string) => {
@@ -174,7 +245,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
             <TabsList className="flex-wrap h-auto">
               {FORMATS.map(f => {
-                const saved = savedTypes.has(f.type)
+                const saved = savedIds.has(f.type)
                 return (
                   <TabsTrigger key={f.type} value={f.type} className="text-xs gap-1">
                     {saved && <Check className="w-3 h-3 text-emerald-400" />}
@@ -186,7 +257,8 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
 
             {FORMATS.map(f => {
               const r = results.find(x => x.type === f.type)
-              const saved = savedTypes.has(f.type)
+              const saved = savedIds.has(f.type)
+              const isRegen = regenerating.has(f.type)
               return (
                 <TabsContent key={f.type} value={f.type} className="flex-1 overflow-y-auto mt-3">
                   {!r ? (
@@ -195,6 +267,62 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
                     <div className="p-4 text-sm text-destructive bg-destructive/10 rounded-lg">{r.error}</div>
                   ) : (
                     <div className="space-y-3">
+                      {/* Per-format options bar */}
+                      {f.type === 'ideias_carrossel' && (
+                        <div className="flex items-center gap-2 flex-wrap rounded-lg border border-border bg-muted/30 p-2.5 text-xs">
+                          <span className="text-muted-foreground">Slides:</span>
+                          {SLIDE_OPTIONS.map(n => (
+                            <Button
+                              key={n}
+                              size="sm"
+                              variant={slideCount === n ? 'default' : 'outline'}
+                              className="h-7 px-3 text-xs"
+                              onClick={() => setSlideCount(n)}
+                              disabled={isRegen}
+                            >
+                              {n}
+                            </Button>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 gap-1.5 text-xs ml-auto"
+                            onClick={() => regenerateOne('ideias_carrossel')}
+                            disabled={isRegen}
+                          >
+                            {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                            Gerar com {slideCount} slides
+                          </Button>
+                        </div>
+                      )}
+                      {f.type === 'frases_impacto' && (
+                        <div className="flex items-center gap-2 flex-wrap rounded-lg border border-border bg-muted/30 p-2.5 text-xs">
+                          <span className="text-muted-foreground">Stories:</span>
+                          {STORY_OPTIONS.map(n => (
+                            <Button
+                              key={n}
+                              size="sm"
+                              variant={storyCount === n ? 'default' : 'outline'}
+                              className="h-7 px-3 text-xs"
+                              onClick={() => setStoryCount(n)}
+                              disabled={isRegen}
+                            >
+                              {n}
+                            </Button>
+                          ))}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 gap-1.5 text-xs ml-auto"
+                            onClick={() => regenerateOne('frases_impacto')}
+                            disabled={isRegen}
+                          >
+                            {isRegen ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                            Gerar {storyCount} stories
+                          </Button>
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                           {saved ? (
@@ -223,7 +351,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
           <div className="flex items-center gap-2">
             {!loading && results.length > 0 && (
               <Button variant="outline" onClick={generate} className="gap-2">
-                <Wand2 className="w-4 h-4" /> Gerar de novo
+                <Wand2 className="w-4 h-4" /> Gerar tudo de novo
               </Button>
             )}
           </div>
