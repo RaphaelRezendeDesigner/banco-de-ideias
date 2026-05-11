@@ -73,6 +73,29 @@ export default function BrainstormPage() {
     setGenerating(true)
     setResults([])
     try {
+      // 1) Persist the brainstorm so we can attach the texts to it
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        toast({ title: 'Faça login para gerar', variant: 'destructive' })
+        return
+      }
+      let brainstormId = savedBrainstormId
+      if (!brainstormId) {
+        const { data: saved, error: bsErr } = await supabase
+          .from('brainstorms')
+          .insert({ user_id: user.id, ...data })
+          .select()
+          .single()
+        if (bsErr) {
+          toast({ title: 'Erro ao salvar brainstorm', description: bsErr.message, variant: 'destructive' })
+          return
+        }
+        brainstormId = saved.id
+        setSavedBrainstormId(brainstormId)
+      }
+
+      // 2) Generate all 5 formats
       const res = await fetch('/api/ai/generate-multi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,9 +107,40 @@ export default function BrainstormPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erro')
-      setResults(json.formats as FormatResult[])
+      const formats = json.formats as FormatResult[]
+      setResults(formats)
       setTab('result')
-      toast({ title: '5 formatos gerados!', variant: 'success' })
+
+      // 3) Auto-save every successful format to the library
+      const titlePrefix = data.central_idea.trim() || 'Brainstorm'
+      const toInsert = formats
+        .filter(r => !r.error && r.result)
+        .map(r => {
+          const meta = FORMATS.find(f => f.type === r.type)!
+          return {
+            user_id: user.id,
+            brainstorm_id: brainstormId,
+            title: `${titlePrefix} — ${meta.label}`,
+            content: r.result,
+            status: 'rascunho',
+            format: meta.format,
+            word_count: r.result.trim().split(/\s+/).filter(Boolean).length,
+          }
+        })
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from('texts').insert(toInsert)
+        if (insErr) {
+          toast({ title: 'Erro ao salvar textos', description: insErr.message, variant: 'destructive' })
+        } else {
+          toast({
+            title: `${toInsert.length} formatos gerados e salvos!`,
+            description: 'Disponíveis em Biblioteca de Textos',
+            variant: 'success',
+          })
+        }
+      } else {
+        toast({ title: 'Nenhum formato foi gerado', variant: 'destructive' })
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Erro desconhecido'
       toast({ title: 'Erro na geração', description: message, variant: 'destructive' })

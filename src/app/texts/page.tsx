@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, FileText, LayoutGrid, List, Loader2, Lightbulb, Layers, ChevronRight, ArrowUpRight } from 'lucide-react'
+import { Plus, FileText, LayoutGrid, List, Loader2, Lightbulb, Layers, ChevronRight, ArrowUpRight, Brain } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { TextCard } from '@/components/TextCard'
@@ -13,7 +13,10 @@ import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
 import type { Text, Category } from '@/types'
 
-type TextWithIdea = Text & { idea?: { id: string; title: string } | null }
+type TextWithIdea = Text & {
+  idea?: { id: string; title: string } | null
+  brainstorm?: { id: string; central_idea: string } | null
+}
 
 const TEXT_STATUS_OPTIONS = [
   { value: 'rascunho', label: 'Rascunho' },
@@ -70,7 +73,7 @@ export default function TextsPage() {
     const [textsRes, catsRes] = await Promise.all([
       supabase
         .from('texts')
-        .select('*, category:categories(*), idea:ideas(id, title)')
+        .select('*, category:categories(*), idea:ideas(id, title), brainstorm:brainstorms(id, central_idea)')
         .order('created_at', { ascending: false }),
       supabase.from('categories').select('*').order('name'),
     ])
@@ -124,13 +127,34 @@ export default function TextsPage() {
     outros: filtered.filter(t => !['pronto', 'rascunho', 'revisar'].includes(t.status)),
   }
 
-  // Group by idea, preserving original (most-recent-first) order
+  // Group by idea OR brainstorm, preserving most-recent-first order.
+  // - Texts with idea_id → grouped under the idea (clickable, leads to /ideas/:id)
+  // - Texts with brainstorm_id (and no idea) → grouped under "Brainstorm: <central_idea>"
+  // - Anything else → "Sem origem"
   const ideaGroups = useMemo(() => {
-    const map = new Map<string, { id: string | null; title: string; texts: TextWithIdea[] }>()
+    type Group = {
+      key: string
+      kind: 'idea' | 'brainstorm' | 'orphan'
+      ideaId?: string
+      title: string
+      texts: TextWithIdea[]
+    }
+    const map = new Map<string, Group>()
     for (const t of filtered) {
-      const key = t.idea?.id ?? '__orphan__'
-      const title = t.idea?.title ?? 'Sem ideia vinculada'
-      if (!map.has(key)) map.set(key, { id: t.idea?.id ?? null, title, texts: [] })
+      let key: string
+      let group: Omit<Group, 'texts'>
+      if (t.idea?.id) {
+        key = `idea:${t.idea.id}`
+        group = { key, kind: 'idea', ideaId: t.idea.id, title: t.idea.title }
+      } else if (t.brainstorm?.id) {
+        key = `bs:${t.brainstorm.id}`
+        const ci = t.brainstorm.central_idea?.trim() || 'Brainstorm sem título'
+        group = { key, kind: 'brainstorm', title: ci }
+      } else {
+        key = '__orphan__'
+        group = { key, kind: 'orphan', title: 'Sem origem' }
+      }
+      if (!map.has(key)) map.set(key, { ...group, texts: [] })
       map.get(key)!.texts.push(t)
     }
     return Array.from(map.values())
@@ -216,33 +240,40 @@ export default function TextsPage() {
         ) : groupBy === 'idea' ? (
           <div className="space-y-3">
             {ideaGroups.map(group => {
-              const groupKey = group.id ?? '__orphan__'
-              const isOpen = expandedGroups.has(groupKey)
+              const isOpen = expandedGroups.has(group.key)
+              const Icon = group.kind === 'brainstorm' ? Brain : Lightbulb
+              const iconBg = group.kind === 'brainstorm' ? 'bg-blue-500/10' : 'bg-gold-500/10'
+              const iconColor = group.kind === 'brainstorm' ? 'text-blue-400' : 'text-gold-400'
+              const sourceLabel = group.kind === 'brainstorm'
+                ? 'do Brainstorm'
+                : group.kind === 'idea'
+                ? 'da Caixa de Ideias'
+                : 'sem origem definida'
               return (
                 <div
-                  key={groupKey}
+                  key={group.key}
                   className="rounded-xl border border-border bg-card overflow-hidden transition-all hover:border-gold-500/30"
                 >
                   <button
                     type="button"
-                    onClick={() => toggleGroup(groupKey)}
+                    onClick={() => toggleGroup(group.key)}
                     className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gold-500/10 shrink-0">
-                        <Lightbulb className="w-4 h-4 text-gold-400" />
+                      <div className={`flex items-center justify-center w-9 h-9 rounded-xl shrink-0 ${iconBg}`}>
+                        <Icon className={`w-4 h-4 ${iconColor}`} />
                       </div>
                       <div className="min-w-0">
                         <p className="font-semibold text-foreground truncate">{group.title}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {group.texts.length} texto{group.texts.length === 1 ? '' : 's'}
+                          {group.texts.length} texto{group.texts.length === 1 ? '' : 's'} · {sourceLabel}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      {group.id && (
+                      {group.kind === 'idea' && group.ideaId && (
                         <Link
-                          href={`/ideas/${group.id}`}
+                          href={`/ideas/${group.ideaId}`}
                           onClick={e => e.stopPropagation()}
                           className="text-xs text-muted-foreground hover:text-gold-400 transition-colors flex items-center gap-1"
                           title="Abrir ideia"
