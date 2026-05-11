@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Settings, ShieldAlert, Sparkles, Moon, Sun, Save, Loader2, Info } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
@@ -11,20 +11,43 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/components/ui/use-toast'
-
-const AI_PROVIDER_FROM_ENV = process.env.NEXT_PUBLIC_AI_PROVIDER || 'none'
-const AI_LABELS: Record<string, string> = {
-  none: 'Sem IA integrada',
-  openai: 'OpenAI (GPT-4o)',
-  anthropic: 'Anthropic (Claude)',
-}
+import { getPreferredProvider, setPreferredProvider, PROVIDER_LABELS } from '@/lib/ai-preference'
+import type { AiProvider } from '@/types'
 
 export default function SettingsPage() {
   const [preCampaignMode, setPreCampaignMode] = useState(false)
   const [theme, setTheme] = useState('dark')
   const [saving, setSaving] = useState(false)
+  const [available, setAvailable] = useState<AiProvider[]>([])
+  const [defaultProvider, setDefaultProvider] = useState<string>('none')
+  const [chosen, setChosen] = useState<string>('none')
+  const [loadingProviders, setLoadingProviders] = useState(true)
   const { toast } = useToast()
-  const aiActive = AI_PROVIDER_FROM_ENV !== 'none'
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/ai/status')
+        const json = await res.json()
+        const av = (json.available ?? []) as AiProvider[]
+        setAvailable(av)
+        setDefaultProvider(json.default ?? 'none')
+        const pref = getPreferredProvider()
+        if (pref && av.includes(pref)) setChosen(pref)
+        else setChosen(json.default ?? 'none')
+      } catch {
+        setAvailable([])
+      } finally {
+        setLoadingProviders(false)
+      }
+    })()
+  }, [])
+
+  const handleProviderChange = (value: string) => {
+    setChosen(value)
+    setPreferredProvider(value as AiProvider)
+    toast({ title: `IA agora: ${PROVIDER_LABELS[value] || value}`, variant: 'success' })
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -101,25 +124,53 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1">
-              <p className="text-xs text-muted-foreground">Status atual (definido pelo servidor)</p>
-              <p className="text-sm font-medium flex items-center gap-2">
-                {aiActive ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-                    Ativa — {AI_LABELS[AI_PROVIDER_FROM_ENV] || AI_PROVIDER_FROM_ENV}
-                  </>
-                ) : (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block" />
-                    Desativada (modo "copiar prompt")
-                  </>
-                )}
-              </p>
-              <p className="text-[11px] text-muted-foreground pt-1">
-                Para mudar, edite as variáveis <code>NEXT_PUBLIC_AI_PROVIDER</code>, <code>AI_PROVIDER</code> e a chave correspondente no Vercel e refaça o deploy.
-              </p>
-            </div>
+            {loadingProviders ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Verificando provedores configurados...
+              </div>
+            ) : available.length === 0 ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+                <p className="font-medium text-amber-400">Nenhum provedor de IA configurado</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  No Vercel, adicione pelo menos uma das chaves: <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code> ou <code>GEMINI_API_KEY</code>.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Usar IA</Label>
+                  <Select value={chosen} onValueChange={handleProviderChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {available.map(p => (
+                        <SelectItem key={p} value={p}>
+                          {PROVIDER_LABELS[p] || p}
+                          {p === defaultProvider && ' (padrão do servidor)'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Sua escolha fica salva neste navegador. Mudar não exige redeploy.
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1">
+                  <p className="text-xs text-muted-foreground">Provedores disponíveis no servidor</p>
+                  <ul className="text-xs space-y-1">
+                    {available.map(p => (
+                      <li key={p} className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                        {PROVIDER_LABELS[p] || p}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

@@ -135,26 +135,33 @@ Slides 2-6: Desenvolvimento
 Slide 7: CTA e informação de contato`
 }
 
-export async function generateWithAI(params: GenerateParams): Promise<string> {
-  const raw = process.env.AI_PROVIDER || process.env.NEXT_PUBLIC_AI_PROVIDER
-  const provider = raw as 'openai' | 'anthropic' | 'none' | undefined
+type ProviderName = 'openai' | 'anthropic' | 'gemini' | 'none'
+
+export function listAvailableProviders(): ProviderName[] {
+  const out: ProviderName[] = []
+  if (process.env.OPENAI_API_KEY) out.push('openai')
+  if (process.env.ANTHROPIC_API_KEY) out.push('anthropic')
+  if (process.env.GEMINI_API_KEY) out.push('gemini')
+  return out
+}
+
+export async function generateWithAI(params: GenerateParams & { provider?: ProviderName }): Promise<string> {
+  const envProvider = (process.env.AI_PROVIDER || process.env.NEXT_PUBLIC_AI_PROVIDER) as ProviderName | undefined
+  const requested = params.provider && params.provider !== 'none' ? params.provider : envProvider
   const prompt = GENERATION_PROMPTS[params.type](params)
 
-  if (!provider || provider === 'none') {
-    const hasOpenAI = !!process.env.OPENAI_API_KEY
-    const hasAnthropic = !!process.env.ANTHROPIC_API_KEY
-    if (hasOpenAI) return generateWithOpenAI(prompt)
-    if (hasAnthropic) return generateWithAnthropic(prompt)
-    throw new Error('IA não configurada. No Vercel, defina AI_PROVIDER=openai (ou anthropic) e a chave OPENAI_API_KEY (ou ANTHROPIC_API_KEY).')
+  // Validate the requested provider has its key. If not, fall back to any configured one.
+  const available = listAvailableProviders()
+  let chosen: ProviderName | undefined = requested && available.includes(requested) ? requested : undefined
+  if (!chosen) chosen = available[0]
+
+  if (!chosen) {
+    throw new Error('IA não configurada. No Vercel, defina pelo menos uma variável: GEMINI_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY.')
   }
 
-  if (provider === 'openai') {
-    return generateWithOpenAI(prompt)
-  }
-
-  if (provider === 'anthropic') {
-    return generateWithAnthropic(prompt)
-  }
+  if (chosen === 'openai') return generateWithOpenAI(prompt)
+  if (chosen === 'anthropic') return generateWithAnthropic(prompt)
+  if (chosen === 'gemini') return generateWithGemini(prompt)
 
   throw new Error('Provedor de IA inválido')
 }
@@ -211,6 +218,31 @@ async function generateWithAnthropic(prompt: string): Promise<string> {
 
   const data = await response.json()
   return data.content[0]?.text || ''
+}
+
+async function generateWithGemini(prompt: string): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) throw new Error('GEMINI_API_KEY não configurada')
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 2000, temperature: 0.8 },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const err = await response.text()
+    throw new Error(`Gemini erro: ${err}`)
+  }
+
+  const data = await response.json()
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || ''
 }
 
 export function getPromptOnly(params: GenerateParams): string {

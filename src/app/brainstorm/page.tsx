@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createClient } from '@/lib/supabase/client'
+import { getPreferredProvider } from '@/lib/ai-preference'
 import type { GenerationType, TextFormat } from '@/types'
 
 interface BrainstormData {
@@ -75,7 +76,11 @@ export default function BrainstormPage() {
       const res = await fetch('/api/ai/generate-multi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brainstorm: data, types: FORMATS.map(f => f.type) }),
+        body: JSON.stringify({
+          brainstorm: data,
+          types: FORMATS.map(f => f.type),
+          provider: getPreferredProvider() ?? undefined,
+        }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erro')

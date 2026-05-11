@@ -3,7 +3,7 @@ export type UrgencyLevel = 'baixa' | 'media' | 'alta'
 export type TextStatus = 'rascunho' | 'revisar' | 'pronto' | 'gravado' | 'publicado' | 'arquivado'
 export type TextFormat = 'video' | 'legenda' | 'discurso' | 'release' | 'story' | 'carrossel' | 'audio' | 'site'
 export type ContentTone = 'firme' | 'emocional' | 'institucional' | 'popular' | 'provocativo' | 'tecnico' | 'esperancoso'
-export type AiProvider = 'openai' | 'anthropic' | 'none'
+export type AiProvider = 'openai' | 'anthropic' | 'gemini' | 'none'
 export type GenerationType =
   | 'roteiro_30s'
   | 'roteiro_45s'

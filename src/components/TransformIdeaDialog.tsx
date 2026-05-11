@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
+import { getPreferredProvider } from '@/lib/ai-preference'
 import type { Idea, GenerationType, TextFormat } from '@/types'
 
 interface TransformIdeaDialogProps {
@@ -62,6 +63,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
         body: JSON.stringify({
           idea: { title: idea.title, description: idea.description },
           types: FORMATS.map(f => f.type),
+          provider: getPreferredProvider() ?? undefined,
         }),
       })
       const json = await res.json()

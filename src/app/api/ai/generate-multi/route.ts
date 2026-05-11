@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { generateWithAI } from '@/lib/ai-service'
-import type { GenerationType } from '@/types'
+import type { GenerationType, AiProvider } from '@/types'
 
 const DEFAULT_TYPES: GenerationType[] = [
   'roteiro_30s',
@@ -19,10 +19,12 @@ export async function POST(request: NextRequest) {
       idea,
       brainstorm,
       types = DEFAULT_TYPES,
+      provider,
     } = body as {
       idea?: { title: string; description?: string }
       brainstorm?: Parameters<typeof generateWithAI>[0]['brainstorm']
       types?: GenerationType[]
+      provider?: AiProvider
     }
 
     if (!idea && !brainstorm) {
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     const results = await Promise.allSettled(
       types.map(type =>
-        generateWithAI({ type, brainstorm: synthesizedBrainstorm })
+        generateWithAI({ type, brainstorm: synthesizedBrainstorm, provider })
       )
     )
 
