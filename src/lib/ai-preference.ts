@@ -21,5 +21,5 @@ export function setPreferredProvider(provider: AiProvider | null) {
 export const PROVIDER_LABELS: Record<string, string> = {
   openai: 'OpenAI (GPT-4o)',
   anthropic: 'Anthropic (Claude Sonnet)',
-  gemini: 'Google Gemini 2.0 Flash (grátis)',
+  gemini: 'Google Gemini 2.5 Flash (grátis)',
 }
