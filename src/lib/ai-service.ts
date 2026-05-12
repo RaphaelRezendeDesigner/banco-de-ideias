@@ -134,21 +134,21 @@ Regras:
 
 function buildCarousel(p: GenerateParams): string {
   const slides = p.slideCount && p.slideCount > 0 ? p.slideCount : 7
-  const closing = slides
-  return `Crie um roteiro de carrossel para Instagram com exatamente ${slides} slides.
+  return `Crie um carrossel para Instagram com exatamente ${slides} slides sobre o tema abaixo.
 Contexto:${contextBlock(p)}
 
-Para cada slide entregue:
-- Número do slide
-- Título (até 6 palavras)
-- Texto do slide (até 30 palavras)
-- Sugestão de elemento visual (foto, cor, ícone)
-
-Estrutura:
+Estrutura obrigatória:
 - Slide 1: Capa com frase-gancho forte (parar o scroll)
-${slides > 2 ? `- Slides 2 a ${slides - 1}: Desenvolvimento progressivo do argumento\n` : ''}- Slide ${closing}: CTA + informação de contato (sem pedido de voto)
+${slides > 2 ? `- Slides 2 a ${slides - 1}: Desenvolvimento progressivo do argumento\n` : ''}- Slide ${slides}: CTA + informação de contato (sem pedido de voto)
 
-Linguagem natural, próxima do interior do Amazonas. Cada slide deve fazer sentido mesmo sem os outros.`
+Entregue cada slide EXATAMENTE neste formato (mesmas chaves, em português):
+
+SLIDE [N]
+Título: <até 6 palavras>
+Texto: <até 30 palavras>
+Visual: <sugestão de fundo, foto, cor ou ícone>
+
+Repita para os ${slides} slides. Linguagem natural, próxima do interior do Amazonas. Cada slide funciona isolado.`
 }
 
 type ProviderName = 'openai' | 'anthropic' | 'gemini' | 'none'

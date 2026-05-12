@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createClient } from '@/lib/supabase/client'
 import { getPreferredProvider } from '@/lib/ai-preference'
+import { AiImageGallery } from '@/components/AiImageGallery'
 import type { GenerationType, TextFormat } from '@/types'
 
 interface BrainstormData {
@@ -264,6 +265,22 @@ export default function BrainstormPage() {
                           <pre className="whitespace-pre-wrap text-sm font-sans bg-muted/30 border border-border rounded-lg p-4 leading-relaxed">
                             {r.result}
                           </pre>
+
+                          {(f.type === 'frases_impacto' || f.type === 'ideias_carrossel') && (
+                            <div className="pt-2 space-y-2">
+                              <div className="flex items-center gap-2 pt-1">
+                                <div className="h-px flex-1 bg-border" />
+                                <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                                  Imagens prontas para postar
+                                </span>
+                                <div className="h-px flex-1 bg-border" />
+                              </div>
+                              <AiImageGallery
+                                kind={f.type === 'frases_impacto' ? 'story' : 'slide'}
+                                content={r.result}
+                              />
+                            </div>
+                          )}
                         </div>
                       )}
                     </TabsContent>

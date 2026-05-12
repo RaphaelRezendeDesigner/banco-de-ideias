@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
 import { getPreferredProvider } from '@/lib/ai-preference'
+import { AiImageGallery } from '@/components/AiImageGallery'
 import type { Idea, GenerationType, TextFormat } from '@/types'
 
 interface TransformIdeaDialogProps {
@@ -338,6 +339,24 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
                       <pre className="whitespace-pre-wrap text-sm font-sans bg-muted/30 border border-border rounded-lg p-4 leading-relaxed">
                         {r.result}
                       </pre>
+
+                      {/* Image gallery for stories and carousel */}
+                      {(f.type === 'frases_impacto' || f.type === 'ideias_carrossel') && (
+                        <div className="pt-2 space-y-2">
+                          <div className="flex items-center gap-2 pt-1">
+                            <div className="h-px flex-1 bg-border" />
+                            <span className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                              Imagens prontas para postar
+                            </span>
+                            <div className="h-px flex-1 bg-border" />
+                          </div>
+                          <AiImageGallery
+                            kind={f.type === 'frases_impacto' ? 'story' : 'slide'}
+                            content={r.result}
+                            titleHint={idea?.title}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </TabsContent>
