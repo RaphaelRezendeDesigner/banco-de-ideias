@@ -220,7 +220,7 @@ async function generateWithOpenAI(prompt: string): Promise<string> {
     body: JSON.stringify({
       model: 'gpt-4o',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 2000,
+      max_tokens: 8000,
       temperature: 0.8,
     }),
   })
@@ -247,7 +247,7 @@ async function generateWithAnthropic(prompt: string): Promise<string> {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
+      max_tokens: 8000,
       messages: [{ role: 'user', content: prompt }],
     }),
   })
@@ -272,7 +272,7 @@ async function generateWithGemini(prompt: string): Promise<string> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 2000, temperature: 0.8 },
+        generationConfig: { maxOutputTokens: 8000, temperature: 0.8 },
       }),
     }
   )

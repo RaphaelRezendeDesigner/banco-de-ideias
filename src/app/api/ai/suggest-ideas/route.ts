@@ -69,25 +69,54 @@ Categoria sugerida: <um dos nomes da lista acima, ou "" se nenhuma se encaixa>
   }
 }
 
+/**
+ * Strips common markdown decorations and whitespace so simple regexes
+ * can match field labels regardless of how the model formatted them.
+ */
+function normalize(line: string): string {
+  return line
+    .replace(/^[\s>#*_-]+/, '')      // leading bullets, headings, blockquotes, asterisks
+    .replace(/[*_]+$/, '')           // trailing asterisks / underscores
+    .replace(/^\*\*(.+?)\*\*/, '$1') // **bold:** -> bold:
+    .replace(/^__(.+?)__/, '$1')
+    .trim()
+}
+
 function parseIdeas(text: string, expected: number): SuggestedIdea[] {
   if (!text) return []
-  const blocks = text.split(/\n(?=IDEIA\s*\d)/i).filter(Boolean)
+
+  // Normalize the whole text line-by-line first so the split sees clean markers.
+  const cleaned = text
+    .split('\n')
+    .map(normalize)
+    .join('\n')
+
+  // Split on "IDEIA N", "Ideia N", "IDEA N", or numbered list ("1.", "1)") at line start.
+  const blocks = cleaned
+    .split(/\n(?=(?:IDEIA|IDEA)\s*\d|\d+[.)]\s)/i)
+    .filter(b => /(?:IDEIA|IDEA)\s*\d|\d+[.)]\s/i.test(b))
+
   const out: SuggestedIdea[] = []
   for (const raw of blocks) {
-    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean)
+    const lines = raw.split('\n').map(normalize).filter(Boolean)
     const get = (label: RegExp) => {
       const ln = lines.find(l => label.test(l))
       if (!ln) return ''
-      return ln.replace(label, '').replace(/^[:\s]+/, '').replace(/^"|"$/g, '').trim()
+      return ln
+        .replace(label, '')
+        .replace(/^[:\s*]+/, '')
+        .replace(/[*_]+$/, '')
+        .replace(/^"|"$/g, '')
+        .trim()
     }
-    const title = get(/^T[ií]tulo/i)
-    const description = get(/^Descri[cç][aã]o/i)
-    const urgencyRaw = get(/^Urg[eê]ncia/i).toLowerCase()
+    const title = get(/^\**\s*T[ií]tulo/i)
+    const description = get(/^\**\s*Descri[cç][aã]o/i)
+    const urgencyRaw = get(/^\**\s*Urg[eê]ncia/i).toLowerCase()
     const urgency: 'baixa' | 'media' | 'alta' =
       urgencyRaw.startsWith('alt') ? 'alta'
       : urgencyRaw.startsWith('baix') ? 'baixa'
       : 'media'
-    const suggested_category = get(/^Categoria sugerida/i)
+    const suggested_category = get(/^\**\s*Categoria(\s+sugerida)?/i)
     if (title) out.push({ title, description, urgency, suggested_category })
     if (out.length >= expected) break
   }
