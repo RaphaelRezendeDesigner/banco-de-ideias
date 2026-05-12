@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Lightbulb, LayoutGrid, List, Loader2, Sparkles } from 'lucide-react'
+import { Plus, Lightbulb, LayoutGrid, List, Loader2, Sparkles, Wand2 } from 'lucide-react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Button } from '@/components/ui/button'
 import { IdeaCard } from '@/components/IdeaCard'
@@ -10,6 +10,7 @@ import { SearchBar } from '@/components/SearchBar'
 import { FilterPanel } from '@/components/FilterPanel'
 import { IdeaQuickDialog } from '@/components/IdeaQuickDialog'
 import { TransformIdeaDialog } from '@/components/TransformIdeaDialog'
+import { SuggestIdeasDialog } from '@/components/SuggestIdeasDialog'
 import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
 import type { Idea, Category } from '@/types'
@@ -43,6 +44,7 @@ export default function IdeasPage() {
     if (q) setSearch(q)
   }, [])
   const [createOpen, setCreateOpen] = useState(false)
+  const [suggestOpen, setSuggestOpen] = useState(false)
   const [transformIdea, setTransformIdea] = useState<Idea | null>(null)
   const { toast } = useToast()
   const router = useRouter()
@@ -119,10 +121,16 @@ export default function IdeasPage() {
             </h1>
             <p className="text-muted-foreground text-sm mt-0.5">{ideas.length} ideias salvas</p>
           </div>
-          <Button className="gap-2 self-start sm:self-auto" onClick={() => setCreateOpen(true)}>
-            <Plus className="w-4 h-4" />
-            Nova ideia
-          </Button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Button variant="outline" className="gap-2" onClick={() => setSuggestOpen(true)}>
+              <Wand2 className="w-4 h-4" />
+              Sugerir com IA
+            </Button>
+            <Button className="gap-2" onClick={() => setCreateOpen(true)}>
+              <Plus className="w-4 h-4" />
+              Nova ideia
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -185,6 +193,14 @@ export default function IdeasPage() {
       <TransformIdeaDialog
         idea={transformIdea}
         onClose={() => setTransformIdea(null)}
+      />
+
+      <SuggestIdeasDialog
+        open={suggestOpen}
+        onOpenChange={setSuggestOpen}
+        categories={categories}
+        recentIdeas={ideas}
+        onSaved={saved => setIdeas(prev => [...saved, ...prev])}
       />
     </AppLayout>
   )

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   Lightbulb, LayoutDashboard, BookOpen, Brain, FileText,
-  Tag, Settings, ChevronLeft, ChevronRight, Zap, X,
+  Tag, Settings, ChevronLeft, ChevronRight, Zap, X, Megaphone,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useState, useEffect } from 'react'
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/brainstorm', icon: Brain, label: 'Brainstorm' },
   { href: '/texts', icon: FileText, label: 'Biblioteca de Textos' },
   { href: '/categories', icon: Tag, label: 'Categorias' },
+  { href: '/voice', icon: Megaphone, label: 'Voz do Candidato' },
   { href: '/settings', icon: Settings, label: 'Configurações' },
 ]
 

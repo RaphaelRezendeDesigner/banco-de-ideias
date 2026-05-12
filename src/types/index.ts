@@ -108,3 +108,18 @@ export interface AppSettings {
   preCampaignMode: boolean
   theme: 'dark' | 'light'
 }
+
+export interface VoiceSettings {
+  user_id: string
+  candidate_name: string
+  slogans: string[]
+  bordoes: string[]
+  keywords: string[]
+  pautas: string[]
+  cta: string
+  signoff: string
+  avoid: string
+  region_focus: string
+  created_at: string
+  updated_at: string
+}

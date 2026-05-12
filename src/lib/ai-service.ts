@@ -15,25 +15,50 @@ interface GenerateParams {
     free_notes: string
   }
   context?: string
+  // Optional voice profile injected into every prompt
+  voiceContext?: string
   // Optional per-format tuning
   slideCount?: number   // for ideias_carrossel (3, 5, 7, 9...)
   storyCount?: number   // for frases_impacto (number of story options)
 }
 
 const GENERATION_PROMPTS: Record<GenerationType, (params: GenerateParams) => string> = {
-  roteiro_30s: (p) => buildScript(p, 30),
-  roteiro_45s: (p) => buildScript(p, 45),
-  roteiro_60s: (p) => buildScript(p, 60),
-  legenda_instagram: (p) => buildInstagram(p),
-  texto_institucional: (p) => buildInstitutional(p),
-  release: (p) => buildRelease(p),
-  discurso_curto: (p) => buildSpeech(p),
-  frases_impacto: (p) => buildImpactPhrases(p),
-  ideias_carrossel: (p) => buildCarousel(p),
+  roteiro_30s: (p) => withReasoning(buildScript(p, 30), p),
+  roteiro_45s: (p) => withReasoning(buildScript(p, 45), p),
+  roteiro_60s: (p) => withReasoning(buildScript(p, 60), p),
+  legenda_instagram: (p) => withReasoning(buildInstagram(p), p),
+  texto_institucional: (p) => withReasoning(buildInstitutional(p), p),
+  release: (p) => withReasoning(buildRelease(p), p),
+  discurso_curto: (p) => withReasoning(buildSpeech(p), p),
+  frases_impacto: (p) => withReasoning(buildImpactPhrases(p), p),
+  ideias_carrossel: (p) => withReasoning(buildCarousel(p), p),
+}
+
+/**
+ * Appends a standard reasoning + CTA block to every prompt so the
+ * outputs share a consistent voice/structure.
+ */
+function withReasoning(basePrompt: string, p: GenerateParams): string {
+  const hasCustomCta = (p.voiceContext || '').toLowerCase().includes('cta padrão')
+  return `${basePrompt}
+
+LINHA DE RACIOCÍNIO PADRÃO (siga em toda peça):
+1. Gancho emocional ou provocativo nos primeiros segundos / primeiras palavras (para parar o scroll).
+2. Argumento central com dado, exemplo ou história concreta do interior do Amazonas quando possível.
+3. Conexão com o público local (nome de município, situação real, sentimento compartilhado).
+4. Fechamento com chamada para AÇÃO/REFLEXÃO (não para voto).
+5. ${hasCustomCta ? 'Use o CTA padrão da Voz do Candidato (ver bloco acima).' : 'CTA final pedindo engajamento: "Siga se gostou do conteúdo", "Comente o que pensa", "Compartilhe com quem precisa ver", "Marque alguém da sua cidade", etc. Variar entre as peças.'}
+
+REGRAS:
+- Linguagem natural, próxima do interior do Amazonas.
+- Sem pedido explícito de voto, sem número de campanha, sem "vote em mim".
+- Quando houver Slogan / Bordão / Palavra-chave na Voz do Candidato (se fornecida acima), use-os com naturalidade — pelo menos um na peça quando fizer sentido.
+- Não invente dados, estatísticas ou números — se não tiver, use linguagem qualitativa.`
 }
 
 function contextBlock(p: GenerateParams): string {
-  if (!p.brainstorm) return p.context || ''
+  const voice = p.voiceContext || ''
+  if (!p.brainstorm) return (p.context || '') + voice
   const b = p.brainstorm
   return `
 Ideia Central: ${b.central_idea}
@@ -44,7 +69,7 @@ Frase de Impacto: ${b.impact_phrase}
 Argumentos: ${b.main_arguments}
 Exemplos: ${b.local_examples}
 Tom: ${b.tone}
-Observações: ${b.free_notes}`
+Observações: ${b.free_notes}${voice}`
 }
 
 function buildScript(p: GenerateParams, seconds: number): string {
@@ -263,4 +288,24 @@ async function generateWithGemini(prompt: string): Promise<string> {
 
 export function getPromptOnly(params: GenerateParams): string {
   return GENERATION_PROMPTS[params.type](params)
+}
+
+/**
+ * Generate raw text from a prompt, picking provider the same way
+ * generateWithAI does. Useful for one-off prompts that don't map
+ * to a fixed GenerationType (e.g. idea suggestions).
+ */
+export async function generateRawWithAI(prompt: string, providerOverride?: ProviderName): Promise<string> {
+  const envProvider = (process.env.AI_PROVIDER || process.env.NEXT_PUBLIC_AI_PROVIDER) as ProviderName | undefined
+  const requested = providerOverride && providerOverride !== 'none' ? providerOverride : envProvider
+  const available = listAvailableProviders()
+  let chosen: ProviderName | undefined = requested && available.includes(requested) ? requested : undefined
+  if (!chosen) chosen = available[0]
+  if (!chosen) {
+    throw new Error('IA não configurada. No Vercel, defina pelo menos uma variável: GEMINI_API_KEY, OPENAI_API_KEY ou ANTHROPIC_API_KEY.')
+  }
+  if (chosen === 'openai') return generateWithOpenAI(prompt)
+  if (chosen === 'anthropic') return generateWithAnthropic(prompt)
+  if (chosen === 'gemini') return generateWithGemini(prompt)
+  throw new Error('Provedor de IA inválido')
 }

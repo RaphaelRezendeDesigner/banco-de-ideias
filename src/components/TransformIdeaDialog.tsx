@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/use-toast'
 import { createClient } from '@/lib/supabase/client'
 import { getPreferredProvider } from '@/lib/ai-preference'
+import { loadVoiceContext } from '@/lib/loadVoiceContext'
 import { AiImageGallery } from '@/components/AiImageGallery'
 import type { Idea, GenerationType, TextFormat } from '@/types'
 
@@ -67,6 +68,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
     setLoading(true)
     setSavedIds(new Map())
     try {
+      const voiceContext = await loadVoiceContext()
       const res = await fetch('/api/ai/generate-multi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,6 +78,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
           provider: getPreferredProvider() ?? undefined,
           slideCount,
           storyCount,
+          voiceContext,
         }),
       })
       const json = await res.json()
@@ -156,6 +159,7 @@ export function TransformIdeaDialog({ idea, onClose }: TransformIdeaDialogProps)
       }
       if (type === 'ideias_carrossel') body.slideCount = slideCount
       if (type === 'frases_impacto') body.storyCount = storyCount
+      body.voiceContext = await loadVoiceContext()
 
       const res = await fetch('/api/ai/generate', {
         method: 'POST',

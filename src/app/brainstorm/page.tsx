@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createClient } from '@/lib/supabase/client'
 import { getPreferredProvider } from '@/lib/ai-preference'
+import { loadVoiceContext } from '@/lib/loadVoiceContext'
 import { AiImageGallery } from '@/components/AiImageGallery'
 import type { GenerationType, TextFormat } from '@/types'
 
@@ -97,6 +98,7 @@ export default function BrainstormPage() {
       }
 
       // 2) Generate all 5 formats
+      const voiceContext = await loadVoiceContext()
       const res = await fetch('/api/ai/generate-multi', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -104,6 +106,7 @@ export default function BrainstormPage() {
           brainstorm: data,
           types: FORMATS.map(f => f.type),
           provider: getPreferredProvider() ?? undefined,
+          voiceContext,
         }),
       })
       const json = await res.json()

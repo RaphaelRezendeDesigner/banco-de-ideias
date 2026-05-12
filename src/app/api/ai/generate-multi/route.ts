@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       provider,
       slideCount,
       storyCount,
+      voiceContext,
     } = body as {
       idea?: { title: string; description?: string }
       brainstorm?: Parameters<typeof generateWithAI>[0]['brainstorm']
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
       provider?: AiProvider
       slideCount?: number
       storyCount?: number
+      voiceContext?: string
     }
 
     if (!idea && !brainstorm) {
@@ -53,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     const results = await Promise.allSettled(
       types.map(type =>
-        generateWithAI({ type, brainstorm: synthesizedBrainstorm, provider, slideCount, storyCount })
+        generateWithAI({ type, brainstorm: synthesizedBrainstorm, provider, slideCount, storyCount, voiceContext })
       )
     )
 
