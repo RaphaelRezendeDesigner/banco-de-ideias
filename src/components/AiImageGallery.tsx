@@ -11,6 +11,39 @@ import {
   type ParsedStory, type ParsedSlide,
 } from '@/lib/parseAiOutput'
 
+const CANVA_STORY_KEY = 'canva_story_template'
+const CANVA_SLIDE_KEY = 'canva_slide_template'
+
+function getCanvaUrl(kind: 'story' | 'slide'): string {
+  if (typeof window === 'undefined') return ''
+  const saved = localStorage.getItem(kind === 'story' ? CANVA_STORY_KEY : CANVA_SLIDE_KEY)
+  if (saved) return saved
+  return kind === 'story'
+    ? 'https://www.canva.com/create/instagram-stories/'
+    : 'https://www.canva.com/create/instagram-posts/'
+}
+
+function buildItemText(kind: 'story' | 'slide', item: ParsedStory | ParsedSlide): string {
+  if (kind === 'story') {
+    const s = item as ParsedStory
+    return [
+      `STORY ${s.index}`,
+      `Frase principal: "${s.phrase}"`,
+      s.subtext ? `Subtexto: ${s.subtext}` : '',
+      s.visual ? `Visual: ${s.visual}` : '',
+      s.tone ? `Tom: ${s.tone}` : '',
+    ].filter(Boolean).join('\n')
+  } else {
+    const sl = item as ParsedSlide
+    return [
+      `SLIDE ${sl.index}`,
+      `Título: ${sl.title}`,
+      sl.text ? `Texto: ${sl.text}` : '',
+      sl.visual ? `Visual: ${sl.visual}` : '',
+    ].filter(Boolean).join('\n')
+  }
+}
+
 interface Props {
   kind: 'story' | 'slide'
   content: string
@@ -120,6 +153,30 @@ export function AiImageGallery({ kind, content, titleHint }: Props) {
 
   const generatedCount = images.size
 
+  const openInCanvaAll = async () => {
+    const allText = items.map(i => buildItemText(kind, i)).join('\n\n---\n\n')
+    await navigator.clipboard.writeText(allText)
+    const url = getCanvaUrl(kind)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    toast({
+      title: '📋 Texto copiado! Canva aberto.',
+      description: 'Cole o texto nos campos do seu template no Canva.',
+      variant: 'success',
+    })
+  }
+
+  const openInCanvaOne = async (item: ParsedStory | ParsedSlide) => {
+    const text = buildItemText(kind, item)
+    await navigator.clipboard.writeText(text)
+    const url = getCanvaUrl(kind)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    toast({
+      title: `📋 ${kind === 'story' ? 'Story' : 'Slide'} ${item.index} copiado!`,
+      description: 'Cole o texto no Canva.',
+      variant: 'success',
+    })
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap rounded-lg border border-border bg-muted/20 p-3">
@@ -127,7 +184,20 @@ export function AiImageGallery({ kind, content, titleHint }: Props) {
           {items.length} {kind === 'story' ? 'stories' : 'slides'} detectados ·
           {' '}<span className="text-foreground font-medium">{generatedCount}</span> com imagem
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 h-8 text-xs border-[#8B3DFF]/40 text-[#8B3DFF] hover:bg-[#8B3DFF]/10 hover:text-[#8B3DFF]"
+            onClick={openInCanvaAll}
+            title="Copia todos os textos e abre o Canva"
+          >
+            {/* Canva logo approximation */}
+            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm0 2.4c5.304 0 9.6 4.296 9.6 9.6s-4.296 9.6-9.6 9.6S2.4 17.304 2.4 12 6.696 2.4 12 2.4zm-.36 3.84c-1.584 0-2.88.576-3.888 1.728C6.744 9.12 6.24 10.488 6.24 12.12c0 1.608.504 2.904 1.512 3.888 1.008.984 2.256 1.476 3.744 1.476.888 0 1.692-.18 2.412-.54.72-.36 1.296-.876 1.728-1.548l-1.44-.984c-.6.864-1.44 1.296-2.52 1.296-.888 0-1.632-.3-2.232-.9-.6-.6-.9-1.392-.9-2.376 0-1.008.3-1.824.9-2.448.6-.624 1.368-.936 2.304-.936 1.008 0 1.8.408 2.376 1.224l1.44-.984c-.456-.648-1.02-1.14-1.692-1.476-.672-.336-1.404-.504-2.196-.504z"/>
+            </svg>
+            Criar tudo no Canva
+          </Button>
           {generatedCount > 0 && (
             <Button size="sm" variant="outline" className="gap-1.5 h-8 text-xs" onClick={downloadAll}>
               <Download className="w-3 h-3" /> Baixar tudo
@@ -140,7 +210,7 @@ export function AiImageGallery({ kind, content, titleHint }: Props) {
             disabled={busyAll || generatedCount === items.length}
           >
             {busyAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />}
-            Gerar todas as imagens com IA
+            Gerar com IA
           </Button>
         </div>
       </div>
@@ -217,6 +287,18 @@ export function AiImageGallery({ kind, content, titleHint }: Props) {
                     Gerar com IA
                   </Button>
                 )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1 border-[#8B3DFF]/40 text-[#8B3DFF] hover:bg-[#8B3DFF]/10 hover:text-[#8B3DFF]"
+                  onClick={() => openInCanvaOne(item)}
+                  title="Copiar texto e abrir no Canva"
+                >
+                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm0 2.4c5.304 0 9.6 4.296 9.6 9.6s-4.296 9.6-9.6 9.6S2.4 17.304 2.4 12 6.696 2.4 12 2.4zm-.36 3.84c-1.584 0-2.88.576-3.888 1.728C6.744 9.12 6.24 10.488 6.24 12.12c0 1.608.504 2.904 1.512 3.888 1.008.984 2.256 1.476 3.744 1.476.888 0 1.692-.18 2.412-.54.72-.36 1.296-.876 1.728-1.548l-1.44-.984c-.6.864-1.44 1.296-2.52 1.296-.888 0-1.632-.3-2.232-.9-.6-.6-.9-1.392-.9-2.376 0-1.008.3-1.824.9-2.448.6-.624 1.368-.936 2.304-.936 1.008 0 1.8.408 2.376 1.224l1.44-.984c-.456-.648-1.02-1.14-1.692-1.476-.672-.336-1.404-.504-2.196-.504z"/>
+                  </svg>
+                  Canva
+                </Button>
                 <Button
                   size="sm"
                   variant="outline"
